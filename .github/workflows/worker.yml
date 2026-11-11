@@ -1,0 +1,89 @@
+name: Worker
+
+# The worker without a server. GitHub skips most scheduled runs (a dozen ran in two days out of
+# hundreds planned), so one run of `loop` ticks on its own clock for 5 h 30 (`tick` every 5
+# minutes from 08:00 to 17:55 New York time on weekdays: monitor, then the screener from 10:30;
+# every hour otherwise, for the backtests queued from the site), then starts the next run
+# itself. The schedules below only restart the chain if it ever breaks; a run that is already
+# looping makes them wait in the queue, and the next link replaces them.
+# Needs the repository secrets DATABASE_URL, BROKER_API_KEY and BROKER_API_SECRET; until
+# DATABASE_URL is set, every run stops at the first step. Schedules only run from main.
+on:
+  schedule:
+    - cron: "17 * * * *"
+  workflow_dispatch:
+    inputs:
+      command:
+        description: "loop = worker en continu, check = diagnostic, tick = ce qui est dû maintenant"
+        type: choice
+        options: [loop, check, tick, screener, monitor]
+        default: check
+
+concurrency:
+  group: worker
+  cancel-in-progress: false
+
+# The next link of the chain is started with the run's own token.
+permissions:
+  actions: write
+  contents: read
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    # The loop stops starting ticks after 330 minutes; a last screener or backtest fits before
+    # GitHub's 6-hour limit.
+    timeout-minutes: 355
+    defaults:
+      run:
+        working-directory: backend
+    env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      BROKER: alpaca
+      BROKER_ENV: paper
+      BROKER_API_KEY: ${{ secrets.BROKER_API_KEY }}
+      BROKER_API_SECRET: ${{ secrets.BROKER_API_SECRET }}
+    steps:
+      - name: Hosted database configured?
+        id: configured
+        working-directory: .
+        run: |
+          if [ -z "$DATABASE_URL" ]; then
+            echo "::notice::Secret DATABASE_URL absent : rien à faire (voir docs/hebergement-gratuit.md)."
+            echo "ok=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "ok=true" >> "$GITHUB_OUTPUT"
+          fi
+      - if: steps.configured.outputs.ok == 'true'
+        uses: actions/checkout@v4
+      - if: steps.configured.outputs.ok == 'true'
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: backend/pyproject.toml
+      - if: steps.configured.outputs.ok == 'true'
+        run: pip install .
+      - if: steps.configured.outputs.ok == 'true'
+        run: alembic upgrade head
+      - if: steps.configured.outputs.ok == 'true'
+        id: worker
+        run: |
+          date +%s > "$RUNNER_TEMP/started"
+          python -m app.worker ${{ inputs.command || 'loop' }}
+      # Also after a loop that failed late, so a crash never stops the worker for good; not
+      # after a quick failure (no restart every minute on a broken install), nor after a manual
+      # cancel (to stop the worker: Actions → Worker → ⋯ → Disable workflow).
+      - name: Start the next run
+        if: "!cancelled() && steps.configured.outputs.ok == 'true' && (inputs.command || 'loop') == 'loop'"
+        working-directory: .
+        env:
+          GH_TOKEN: ${{ github.token }}
+          OUTCOME: ${{ steps.worker.outcome }}
+        run: |
+          started=$(cat "$RUNNER_TEMP/started" 2>/dev/null || date +%s)
+          if [ "$OUTCOME" != "success" ] && [ $(( $(date +%s) - started )) -lt 1800 ]; then
+            echo "::warning::Échec rapide : pas de relance, le passage horaire reprendra."
+            exit 0
+          fi
+          gh workflow run worker.yml --repo "$GITHUB_REPOSITORY" --ref main -f command=loop

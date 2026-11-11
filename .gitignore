@@ -1,0 +1,11 @@
+.env
+__pycache__/
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+.venv/
+spike_results.csv
+node_modules/
+.next/
+.cache/
+backtest-out/

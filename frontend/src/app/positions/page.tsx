@@ -1,6 +1,7 @@
 import { AutoRefresh } from "@/components/AutoRefresh";
 import { CloseButton } from "@/components/CloseButton";
 import { ExecutionDetails } from "@/components/ExecutionDetails";
+import { ExportPositionsCsvButton } from "@/components/ExportCsvButton";
 import { ApiDown } from "@/components/Stat";
 import { getPositions, type OptionPosition } from "@/lib/api";
 import { STRATEGY_LABEL, dateTime, day, pct, pnlClass, price, signed, strikes, usd } from "@/lib/format";
@@ -51,14 +52,21 @@ export default async function Page() {
   return (
     <section className="space-y-4">
       <AutoRefresh seconds={30} />
-      <div>
-        <h1 className="font-display text-2xl font-extrabold tracking-tight md:text-3xl">Positions ouvertes</h1>
-        <p className="text-sm opacity-70">
-          Mark au milieu bid/ask, relevé toutes les 5 minutes pendant la séance avec le prix naturel. Les sorties se
-          calculent sur le crédit exécuté. Le stop se déclenche sur le prix de rachat attendu confirmé sur plusieurs
-          relevés, pas sur le mid seul, et envoie un ordre limite : il ne garantit pas le prix d&apos;exécution. Le
-          rachat manuel annule l&apos;ordre de prise de profit puis rachète au prix naturel (marché ouvert uniquement).
-        </p>
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div className="max-w-3xl">
+          <h1 className="font-display text-2xl font-extrabold tracking-tight md:text-3xl">Positions ouvertes</h1>
+          <p className="text-sm opacity-70">
+            Mark au milieu bid/ask, relevé toutes les 5 minutes pendant la séance avec le prix naturel. Les sorties se
+            calculent sur le crédit exécuté. Le stop se déclenche sur le prix de rachat attendu confirmé sur plusieurs
+            relevés, pas sur le mid seul, et envoie un ordre limite : il ne garantit pas le prix d&apos;exécution. Le
+            rachat manuel annule l&apos;ordre de prise de profit puis rachète au prix naturel (marché ouvert uniquement).
+          </p>
+        </div>
+        {data && (data.options.length > 0 || data.share_lots.length > 0) ? (
+          <div className="pt-1">
+            <ExportPositionsCsvButton positions={data.options} shareLots={data.share_lots} />
+          </div>
+        ) : null}
       </div>
       {data === null ? (
         <ApiDown />

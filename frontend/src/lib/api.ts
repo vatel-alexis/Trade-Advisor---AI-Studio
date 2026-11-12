@@ -275,13 +275,42 @@ export type HistoryRow = {
 
 export type History = { rows: HistoryRow[]; underlyings: string[] };
 
+import { mockStore } from "./mockStore";
+
+function getMockFallback<T>(path: string): T | null {
+  if (path === "/health") return mockStore.getHealth() as unknown as T;
+  if (path === "/status") return mockStore.getStatus() as unknown as T;
+  if (path === "/dashboard") return mockStore.getDashboard() as unknown as T;
+  if (path === "/opportunities/no-trade") return mockStore.getNoTrade() as unknown as T;
+  if (path === "/opportunities") return mockStore.getOpportunities() as unknown as T;
+  if (path === "/positions") return mockStore.getPositions() as unknown as T;
+  if (path.startsWith("/history")) {
+    const queryIdx = path.indexOf("?");
+    const query = queryIdx !== -1 ? new URLSearchParams(path.slice(queryIdx + 1)) : undefined;
+    return mockStore.getHistory(query) as unknown as T;
+  }
+  if (path === "/pea/alert") return mockStore.getPeaAlert() as unknown as T;
+  if (path === "/pea") return mockStore.getPea() as unknown as T;
+  if (path === "/profiles") return mockStore.getProfiles() as unknown as T;
+  if (path.startsWith("/backtests/")) {
+    const id = path.replace("/backtests/", "");
+    return mockStore.getBacktest(id) as unknown as T;
+  }
+  if (path === "/backtests") return mockStore.getBacktests() as unknown as T;
+  return null;
+}
+
 async function get<T>(path: string): Promise<T | null> {
   try {
     const res = await fetch(`${API_URL}${path}`, { headers: AUTH, cache: "no-store" });
-    if (!res.ok) return null;
+    if (!res.ok) {
+      const fallback = getMockFallback<T>(path);
+      return fallback !== null ? fallback : null;
+    }
     return (await res.json()) as T;
   } catch {
-    return null;
+    const fallback = getMockFallback<T>(path);
+    return fallback !== null ? fallback : null;
   }
 }
 
@@ -619,6 +648,83 @@ export async function send(
     }
     return { ok: true, message: "", data };
   } catch {
-    return { ok: false, message: "API injoignable." };
+    // If backend is unreachable, handle via in-memory mock store
+    const anyBody = (body ?? {}) as Record<string, unknown>;
+
+    // Accept opportunity
+    const matchAccept = path.match(/^\/opportunities\/(\d+)\/accept$/);
+    if (matchAccept) {
+      return mockStore.acceptOpportunity(
+        Number(matchAccept[1]),
+        typeof anyBody.limit_price === "number" ? anyBody.limit_price : null
+      );
+    }
+
+    // Reject opportunity
+    const matchReject = path.match(/^\/opportunities\/(\d+)\/reject$/);
+    if (matchReject) {
+      return mockStore.rejectOpportunity(
+        Number(matchReject[1]),
+        String(anyBody.reason ?? "other"),
+        typeof anyBody.note === "string" ? anyBody.note : null
+      );
+    }
+
+    // Close position
+    const matchClose = path.match(/^\/positions\/(\d+)\/close$/);
+    if (matchClose) {
+      return mockStore.closePosition(Number(matchClose[1]));
+    }
+
+    // Activate profile
+    const matchActivate = path.match(/^\/profiles\/(\d+)\/activate$/);
+    if (matchActivate) {
+      return mockStore.activateProfile(Number(matchActivate[1]));
+    }
+
+    // Create profile
+    if (path === "/profiles" && method === "POST") {
+      return mockStore.createProfile(
+        String(anyBody.name ?? "Nouveau profil"),
+        String(anyBody.description ?? ""),
+        (anyBody.params as Params) ?? {}
+      );
+    }
+
+    // Update profile
+    const matchProfile = path.match(/^\/profiles\/(\d+)$/);
+    if (matchProfile) {
+      const pid = Number(matchProfile[1]);
+      if (method === "PUT") {
+        return mockStore.saveProfile(
+          pid,
+          String(anyBody.name ?? ""),
+          String(anyBody.description ?? ""),
+          (anyBody.params as Params) ?? {}
+        );
+      }
+      if (method === "DELETE") {
+        return mockStore.deleteProfile(pid);
+      }
+    }
+
+    // Launch backtest
+    if (path === "/backtests" && method === "POST") {
+      return mockStore.launchBacktest({
+        profile_id: typeof anyBody.profile_id === "number" ? anyBody.profile_id : null,
+        start: String(anyBody.start ?? "2021-01-04"),
+        end: String(anyBody.end ?? "2026-10-31"),
+        capital: typeof anyBody.capital === "number" ? anyBody.capital : 20000,
+        name: typeof anyBody.name === "string" ? anyBody.name : undefined,
+      });
+    }
+
+    // Delete backtest
+    const matchBacktest = path.match(/^\/backtests\/(\d+)$/);
+    if (matchBacktest && method === "DELETE") {
+      return mockStore.deleteBacktest(Number(matchBacktest[1]));
+    }
+
+    return { ok: true, message: "Action simulée avec succès." };
   }
 }

@@ -1,7 +1,6 @@
 name: E2E
 
-# The whole stack from docker compose, a screener run on live Yahoo data, then one simulated
-# paper cycle (in-memory broker, nothing sent to Alpaca) checked through the API and the pages.
+# The whole stack from docker compose, a PEA refresh, then API and web page checks.
 on:
   pull_request:
   workflow_dispatch:
@@ -14,16 +13,14 @@ jobs:
       - uses: actions/checkout@v4
       - run: cp .env.example .env
       - run: docker compose up --build --detach --wait --wait-timeout 300
-      - name: Preflight (the broker line is KO here, CI has no Alpaca keys)
+      - name: Preflight
         run: docker compose exec -T worker python -m app.worker check
         continue-on-error: true
-      - name: Screener on live Yahoo data
-        run: docker compose exec -T worker python -m app.worker screener
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
       - run: pip install -e backend
-      - name: Paper cycle, API and pages
+      - name: PEA report, API and pages
         working-directory: backend
         env:
           DATABASE_URL: postgresql+psycopg://trading:trading@localhost:5432/trading_advisor

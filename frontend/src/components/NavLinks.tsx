@@ -3,23 +3,15 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
-const NAV = [
-  { href: "/", label: "Tableau de bord" },
-  { href: "/opportunites", label: "Opportunités" },
-  { href: "/positions", label: "Positions" },
-  { href: "/historique", label: "Historique" },
-  { href: "/reglages", label: "Réglages" },
-  { href: "/backtests", label: "Backtests" },
-  { href: "/pea", label: "PEA" },
-];
+const NAV = [{ href: "/pea", label: "PEA" }];
 
-// Main menu: one row on desktop, a second row that scrolls sideways on phones (as on the CV).
+// Main menu: only the PEA tab remains.
 export function NavLinks() {
   const pathname = usePathname();
   return (
     <ul className="order-3 -mx-4 flex basis-full gap-1 overflow-x-auto px-4 pb-2 text-sm whitespace-nowrap [scrollbar-width:none] md:order-none md:mx-0 md:basis-auto md:px-0 md:pb-0 [&::-webkit-scrollbar]:hidden">
       {NAV.map((item) => {
-        const active = item.href === "/" ? pathname === "/" : pathname.startsWith(item.href);
+        const active = pathname === "/" || pathname.startsWith(item.href);
         return (
           <li key={item.href}>
             <Link

@@ -2,13 +2,10 @@ from datetime import timedelta
 from decimal import Decimal
 
 import pytest
-from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 
-from app.db import get_session
 from app.domain.exits import take_profit_price
 from app.domain.orders import Quote
-from app.main import app, get_broker
 from app.models import PositionMark
 from app.models.enums import (
     ExitReason,
@@ -166,36 +163,3 @@ def test_history_lists_closed_and_rejected_deals_with_filters(session: Session) 
     assert not views.history(session, views.HistoryFilter(underlying="QQQ"))
     future = views.history(session, views.HistoryFilter(since=TODAY + timedelta(days=3650)))
     assert not future
-
-
-def test_api_read_routes_and_manual_close(session: Session) -> None:
-    broker = FakeBroker()
-    app.dependency_overrides[get_session] = lambda: session
-    app.dependency_overrides[get_broker] = lambda: broker
-    try:
-        client = TestClient(app)
-        position = open_spread(session, broker)
-        spread(session)
-        broker.quotes = {SHORT: Quote(0.80, 0.90), LONG: Quote(0.20, 0.25)}
-        board = client.get("/dashboard")
-        cards = client.get("/opportunities")
-        held = client.get("/positions")
-        closed = client.post(
-            f"/positions/{position.id}/close", json={"idempotency_key": "close-0001"}
-        )
-        again = client.post(
-            f"/positions/{position.id}/close", json={"idempotency_key": "close-0002"}
-        )
-        log = client.get("/history", params={"kind": ["closed", "rejected"], "strategy": "shares"})
-        bad = client.get("/history", params={"kind": "nope"})
-    finally:
-        app.dependency_overrides.clear()
-
-    assert board.status_code == 200 and board.json()["open_positions"] == 1
-    assert cards.status_code == 200 and len(cards.json()) == 1
-    assert held.status_code == 200 and held.json()["options"][0]["id"] == position.id
-    assert closed.status_code == 200, closed.text
-    assert closed.json()["order_status"] == "submitted" and closed.json()["limit_price"] == 0.7
-    assert again.status_code == 409  # a buy-back is already working
-    assert log.status_code == 200 and log.json()["rows"] == []
-    assert bad.status_code == 422

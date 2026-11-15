@@ -17,6 +17,6 @@ def test_api_token_guards_everything_but_health(migrated_db: str, monkeypatch) -
     client = TestClient(app)
 
     assert client.get("/health").status_code == 200
-    assert client.get("/dashboard").status_code == 401
-    assert client.get("/dashboard", headers={"X-API-Token": "wrong"}).status_code == 401
-    assert client.get("/dashboard", headers={"X-API-Token": "s3cret"}).status_code == 200
+    assert client.get("/pea").status_code == 401
+    assert client.get("/pea", headers={"X-API-Token": "wrong"}).status_code == 401
+    assert client.get("/pea", headers={"X-API-Token": "s3cret"}).status_code == 200

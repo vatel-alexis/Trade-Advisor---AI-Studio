@@ -3,14 +3,11 @@
 from datetime import date
 
 import pytest
-from fastapi.testclient import TestClient
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.db import get_session
 from app.domain.params import StrategyParams
-from app.main import app
-from app.models import BacktestRun, StrategyConfig, StrategyProfile
+from app.models import StrategyProfile
 from app.services import lab
 from app.services.screening import active_config
 from tests.test_backtest import market, wavy
@@ -192,46 +189,3 @@ def test_interrupted_runs_fail_at_worker_start(session: Session) -> None:
     assert lab.fail_interrupted(session) == 1
     session.refresh(run)
     assert run.status == lab.FAILED
-
-
-def test_api_profiles_and_backtests(session: Session) -> None:
-    app.dependency_overrides[get_session] = lambda: session
-    try:
-        client = TestClient(app)
-        listing = client.get("/profiles").json()
-        prudent = next(p["id"] for p in listing["profiles"] if p["name"] == "Prudent")
-        created = client.post(
-            "/profiles",
-            json={"name": "Tendance", "params": {"use_trend_filter": True}, "copy_from": prudent},
-        )
-        bad = client.post("/profiles", json={"name": "X", "params": {"delta_min": "abc"}})
-        pid = created.json()["id"]
-        renamed = client.put(f"/profiles/{pid}", json={"name": "Tendance 200"})
-        activated = client.post(f"/profiles/{pid}/activate")
-        queued = client.post(
-            "/backtests", json={"profile_id": pid, "start": "2019-01-02", "end": "2019-11-15"}
-        )
-        empty = client.post("/backtests", json={})
-        runs = client.get("/backtests").json()
-        detail = client.get(f"/backtests/{queued.json()['id']}")
-        removed = client.delete(f"/backtests/{queued.json()['id']}")
-        missing = client.get("/backtests/999999")
-    finally:
-        app.dependency_overrides.clear()
-
-    assert len(listing["profiles"]) == 4
-    assert created.status_code == 200, created.text
-    assert created.json()["params"]["dte_min"] == 45  # copied from Prudent
-    assert created.json()["risk"]["status"] == "untested"
-    assert created.json()["params"]["use_trend_filter"] is True
-    assert bad.status_code == 422 and "invalide" in bad.json()["detail"]
-    assert renamed.json()["name"] == "Tendance 200"
-    assert activated.status_code == 200
-    assert session.scalar(select(StrategyConfig).where(StrategyConfig.is_active)).profile_id == pid
-    assert queued.status_code == 200 and queued.json()["status"] == "queued"
-    assert empty.status_code == 422
-    assert runs["runs"][0]["profile_name"] == "Tendance 200" and runs["cache"] is None
-    assert "entry_slippage" in runs["model_defaults"]
-    assert detail.json()["params"]["use_trend_filter"] is True
-    assert removed.status_code == 200 and missing.status_code == 404
-    assert session.get(BacktestRun, queued.json()["id"]) is None

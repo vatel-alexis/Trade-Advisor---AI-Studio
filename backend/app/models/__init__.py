@@ -1,7 +1,7 @@
 from app.models.base import Base
 from app.models.lab import BacktestRun, MarketHistoryCache, StrategyProfile
 from app.models.market import AccountSnapshot, IvHistory, JobHeartbeat
-from app.models.pea import PeaReport
+from app.models.pea import PeaReport, PeaUserPortfolio
 from app.models.strategy import (
     Decision,
     Opportunity,
@@ -25,6 +25,7 @@ __all__ = [
     "OpportunityLeg",
     "Order",
     "PeaReport",
+    "PeaUserPortfolio",
     "Position",
     "PositionEvent",
     "PositionLeg",
@@ -34,3 +35,4 @@ __all__ = [
     "StrategyConfig",
     "StrategyProfile",
 ]
+

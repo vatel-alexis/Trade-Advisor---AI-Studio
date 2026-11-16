@@ -1,5 +1,4 @@
 import type { Metadata, Viewport } from "next";
-import { IBM_Plex_Mono, IBM_Plex_Sans, Montserrat } from "next/font/google";
 import Image from "next/image";
 import Link from "next/link";
 
@@ -7,14 +6,9 @@ import { NavLinks } from "@/components/NavLinks";
 import { PeaAlert } from "@/components/PeaAlert";
 import "./globals.css";
 
-// Same type families as the CV site.
-const heading = Montserrat({ subsets: ["latin"], weight: ["300", "500", "700", "800"], variable: "--font-heading" });
-const body = IBM_Plex_Sans({ subsets: ["latin"], weight: ["400", "500", "600"], variable: "--font-body" });
-const code = IBM_Plex_Mono({ subsets: ["latin"], weight: ["400", "500"], variable: "--font-code" });
-
 export const metadata: Metadata = {
   title: "Trading Advisor — Portefeuille PEA",
-  description: "Répartition mensuelle d'ETF éligibles PEA en suivi de tendance",
+  description: "Répartition mensuelle d'ETF éligibles PEA, suivi de la performance et gestion de portefeuille",
 };
 
 export const viewport: Viewport = {
@@ -33,7 +27,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="fr" className={`${heading.variable} ${body.variable} ${code.variable}`}>
+    <html lang="fr">
       <body className="min-h-dvh antialiased">
         <header className="sticky top-0 z-20 border-b border-line bg-background/85 pt-[env(safe-area-inset-top)] backdrop-blur-md">
           <nav className="mx-auto flex max-w-6xl flex-wrap items-center gap-x-6 gap-y-2 px-4 pt-3 md:py-3">

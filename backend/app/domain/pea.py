@@ -455,6 +455,14 @@ def report(
 
     benchmark_level = Level("benchmark", "S&P 500", "", 1, 0.0, {"sp500": 1.0})
     bench = backtest(benchmark_level, days, index)
+    benchmarks: dict[str, dict[str, object]] = {}
+    asset_curves: dict[str, list[dict[str, object]]] = {}
+    for asset in ASSETS:
+        a_level = Level(f"bench_{asset.key}", asset.label, "", 1, 0.0, {asset.key: 1.0})
+        a_bt = backtest(a_level, days, index)
+        if a_bt.days:
+            benchmarks[asset.key] = {"key": asset.key, "label": asset.label, **summary(a_bt)}
+            asset_curves[asset.key] = monthly_curve(a_bt.days, a_bt.values)
     levels = []
     for level in LEVELS:
         bt = backtest(level, days, index)
@@ -515,6 +523,8 @@ def report(
         "levels": levels,
         "benchmark": {"label": "S&P 500 (PEA) conservé", **summary(bench)},
         "benchmark_curve": monthly_curve(bench.days, bench.values),
+        "benchmarks": benchmarks,
+        "asset_curves": asset_curves,
         "assumptions": {
             "cost": COST,
             "drift": DRIFT,
@@ -524,3 +534,4 @@ def report(
             "start": BACKTEST_START.isoformat(),
         },
     }
+

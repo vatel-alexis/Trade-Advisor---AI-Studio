@@ -59,3 +59,14 @@ def get_pea(session: DbSession) -> dict[str, object]:
 @app.get("/pea/alert")
 def get_pea_alert(session: DbSession) -> dict[str, object]:
     return pea.alert(session, datetime.now(ZoneInfo("Europe/Paris")).date())
+
+
+@app.get("/pea/portfolio")
+def get_pea_portfolio(session: DbSession) -> dict[str, object]:
+    return pea.get_portfolio(session)
+
+
+@app.put("/pea/portfolio")
+def put_pea_portfolio(payload: dict[str, object], session: DbSession) -> dict[str, object]:
+    return pea.save_portfolio(session, payload)
+

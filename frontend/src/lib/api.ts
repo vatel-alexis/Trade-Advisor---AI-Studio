@@ -51,6 +51,8 @@ export type PeaAsset = {
   proxy: string | null;
   since: string;
 };
+export type PeaBenchmark = PeaSummary & { key: string; label: string };
+
 export type PeaReport = {
   as_of: string;
   signal_day: string;
@@ -60,6 +62,8 @@ export type PeaReport = {
   levels: PeaLevel[];
   benchmark: PeaSummary & { label: string };
   benchmark_curve: PeaPoint[];
+  benchmarks?: Record<string, PeaBenchmark>;
+  asset_curves?: Record<string, PeaPoint[]>;
   assumptions: {
     cost: number;
     drift: number;
@@ -78,9 +82,24 @@ export type PeaAlert = {
   provisional_day?: string | null;
 };
 
+export type PeaPortfolioConfig = {
+  input_mode: "eur" | "pct";
+  target_level: string;
+  total_capital: number;
+  cash_available: number;
+  holdings_eur: Record<string, number>;
+  holdings_pct: Record<string, number>;
+  sim_initial_capital: number;
+  sim_monthly_dca: number;
+  sim_horizon: string;
+  sim_benchmarks: string[];
+  updated_at: string | null;
+};
+
 function getMockFallback<T>(path: string): T | null {
   if (path === "/health") return mockStore.getHealth() as unknown as T;
   if (path === "/pea/alert") return mockStore.getPeaAlert() as unknown as T;
+  if (path === "/pea/portfolio") return mockStore.getPortfolio() as unknown as T;
   if (path === "/pea") return mockStore.getPea() as unknown as T;
   return null;
 }
@@ -102,3 +121,24 @@ async function get<T>(path: string): Promise<T | null> {
 export const getHealth = () => get<Health>("/health");
 export const getPea = () => get<Pea>("/pea");
 export const getPeaAlert = () => get<PeaAlert>("/pea/alert");
+export const getPeaPortfolio = () => get<PeaPortfolioConfig>("/pea/portfolio");
+
+export async function savePeaPortfolio(payload: Partial<PeaPortfolioConfig>): Promise<PeaPortfolioConfig> {
+  try {
+    const res = await fetch(`${API_URL}/pea/portfolio`, {
+      method: "PUT",
+      headers: { ...AUTH, "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+      cache: "no-store",
+    });
+    if (res.ok) {
+      const saved = (await res.json()) as PeaPortfolioConfig;
+      mockStore.savePortfolio(saved);
+      return saved;
+    }
+  } catch {
+    // Fallback to mockStore when FastAPI backend is unreachable
+  }
+  return mockStore.savePortfolio(payload);
+}
+

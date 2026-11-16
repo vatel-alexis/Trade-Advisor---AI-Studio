@@ -1,8 +1,13 @@
+@import url("https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&family=Montserrat:wght@300;500;700;800&display=swap");
 @import "tailwindcss";
+
 
 /* Same palette, type and surfaces as the CV site (vatel-alexis.github.io/webcv): a dark fintech
    console by default, its light variant when the device asks for it. */
 :root {
+  --font-heading: "Montserrat", "Helvetica Neue", Arial, sans-serif;
+  --font-body: "IBM Plex Sans", "Segoe UI", Roboto, sans-serif;
+  --font-code: "IBM Plex Mono", ui-monospace, Menlo, Consolas, monospace;
   --bg: #0a1122;
   --surface: #111a31;
   --surface-2: #16213d;

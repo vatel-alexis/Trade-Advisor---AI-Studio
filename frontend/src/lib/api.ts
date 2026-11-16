@@ -121,9 +121,45 @@ async function get<T>(path: string): Promise<T | null> {
 export const getHealth = () => get<Health>("/health");
 export const getPea = () => get<Pea>("/pea");
 export const getPeaAlert = () => get<PeaAlert>("/pea/alert");
-export const getPeaPortfolio = () => get<PeaPortfolioConfig>("/pea/portfolio");
+
+export async function getPeaPortfolio(): Promise<PeaPortfolioConfig | null> {
+  if (process.env.SQL_HOST) {
+    try {
+      const { getUserPortfolioFromDb, upsertUserPortfolioInDb } = await import("../db/users.ts");
+      const existing = await getUserPortfolioFromDb("default-pea-investor", "vatelalexis@gmail.com");
+      if (existing) return existing;
+      return await upsertUserPortfolioInDb(
+        "default-pea-investor",
+        "vatelalexis@gmail.com",
+        mockStore.getPortfolio(),
+        {},
+      );
+    } catch (error) {
+      console.error("Cloud SQL read fallback to mockStore:", error);
+    }
+  }
+  return get<PeaPortfolioConfig>("/pea/portfolio");
+}
 
 export async function savePeaPortfolio(payload: Partial<PeaPortfolioConfig>): Promise<PeaPortfolioConfig> {
+  if (process.env.SQL_HOST) {
+    try {
+      const { getUserPortfolioFromDb, upsertUserPortfolioInDb } = await import("../db/users.ts");
+      const current =
+        (await getUserPortfolioFromDb("default-pea-investor", "vatelalexis@gmail.com")) ??
+        mockStore.getPortfolio();
+      const saved = await upsertUserPortfolioInDb(
+        "default-pea-investor",
+        "vatelalexis@gmail.com",
+        current,
+        payload,
+      );
+      mockStore.savePortfolio(saved);
+      return saved;
+    } catch (error) {
+      console.error("Cloud SQL write fallback:", error);
+    }
+  }
   try {
     const res = await fetch(`${API_URL}/pea/portfolio`, {
       method: "PUT",
@@ -141,4 +177,5 @@ export async function savePeaPortfolio(payload: Partial<PeaPortfolioConfig>): Pr
   }
   return mockStore.savePortfolio(payload);
 }
+
 

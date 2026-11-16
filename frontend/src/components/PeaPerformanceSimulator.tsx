@@ -1,7 +1,8 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
+import { useAuth } from "@/components/AuthContext";
 import { EquityLines, type Line } from "@/components/LabCharts";
 import type { PeaBenchmark, PeaPortfolioConfig, PeaReport } from "@/lib/api";
 import { day, eur, pct, pnlClass, signedEur, signedPct } from "@/lib/format";
@@ -42,6 +43,7 @@ export function PeaPerformanceSimulator({
   report: PeaReport;
   initialConfig: PeaPortfolioConfig;
 }) {
+  const { user, getFreshToken } = useAuth();
   const [initialCapital, setInitialCapital] = useState<number>(initialConfig.sim_initial_capital || 10_000);
   const [monthlyDca, setMonthlyDca] = useState<number>(initialConfig.sim_monthly_dca ?? 200);
   const [horizon, setHorizon] = useState<string>(initialConfig.sim_horizon || "all");
@@ -53,6 +55,28 @@ export function PeaPerformanceSimulator({
   );
   const [saving, setSaving] = useState(false);
   const [saveFeedback, setSaveFeedback] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!user) return;
+    let cancelled = false;
+    (async () => {
+      const token = await getFreshToken();
+      if (!token) return;
+      const res = await fetch("/api/pea/portfolio", {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.ok && !cancelled) {
+        const cfg = (await res.json()) as PeaPortfolioConfig;
+        if (cfg.sim_initial_capital) setInitialCapital(cfg.sim_initial_capital);
+        if (typeof cfg.sim_monthly_dca === "number") setMonthlyDca(cfg.sim_monthly_dca);
+        if (cfg.sim_horizon) setHorizon(cfg.sim_horizon);
+        if (cfg.sim_benchmarks?.length) setActiveBenchmarks(cfg.sim_benchmarks);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [user, getFreshToken]);
 
   const toggleLevel = (key: string) => {
     setActiveLevels((prev) =>
@@ -136,9 +160,12 @@ export function PeaPerformanceSimulator({
     setSaving(true);
     setSaveFeedback(null);
     try {
+      const token = await getFreshToken();
+      const headers: Record<string, string> = { "Content-Type": "application/json" };
+      if (token) headers.Authorization = `Bearer ${token}`;
       const res = await fetch("/api/pea/portfolio", {
         method: "PUT",
-        headers: { "Content-Type": "application/json" },
+        headers,
         body: JSON.stringify({
           sim_initial_capital: initialCapital,
           sim_monthly_dca: monthlyDca,
@@ -147,7 +174,7 @@ export function PeaPerformanceSimulator({
         }),
       });
       if (res.ok) {
-        setSaveFeedback("Paramètres de simulation enregistrés en base de données.");
+        setSaveFeedback("Paramètres de simulation enregistrés en base de données PostgreSQL.");
       } else {
         setSaveFeedback("Erreur lors de la sauvegarde.");
       }

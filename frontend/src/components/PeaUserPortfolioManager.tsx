@@ -1,7 +1,8 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
+import { useAuth } from "@/components/AuthContext";
 import { EquityLines, type Line } from "@/components/LabCharts";
 import type { PeaPortfolioConfig, PeaReport, PeaWeights } from "@/lib/api";
 import { dateTime, eur, eur2, pct, pnlClass, signedEur, signedPct } from "@/lib/format";
@@ -18,6 +19,7 @@ export function PeaUserPortfolioManager({
   initialConfig: PeaPortfolioConfig;
   initialLevelKey?: string;
 }) {
+  const { user, getFreshToken } = useAuth();
   const [inputMode, setInputMode] = useState<"eur" | "pct">(initialConfig.input_mode || "eur");
   const [targetLevelKey, setTargetLevelKey] = useState<string>(
     initialLevelKey || initialConfig.target_level || "moyen",
@@ -42,6 +44,37 @@ export function PeaUserPortfolioManager({
   const [saving, setSaving] = useState(false);
   const [lastSavedAt, setLastSavedAt] = useState<string | null>(initialConfig.updated_at);
   const [feedback, setFeedback] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!user) return;
+    let cancelled = false;
+    (async () => {
+      const token = await getFreshToken();
+      if (!token) return;
+      const res = await fetch("/api/pea/portfolio", {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.ok && !cancelled) {
+        const cfg = (await res.json()) as PeaPortfolioConfig;
+        setInputMode(cfg.input_mode || "eur");
+        if (!initialLevelKey && cfg.target_level) setTargetLevelKey(cfg.target_level);
+        if (cfg.holdings_eur) setHoldingsEur(cfg.holdings_eur);
+        if (cfg.holdings_pct) {
+          const nextPct: Record<string, number> = {};
+          for (const a of report.assets) {
+            nextPct[a.key] = Math.round((cfg.holdings_pct[a.key] ?? 0) * 1000) / 10;
+          }
+          setHoldingsPct(nextPct);
+        }
+        if (cfg.total_capital) setTotalCapitalPctMode(cfg.total_capital);
+        if (typeof cfg.cash_available === "number") setCashToInvest(cfg.cash_available);
+        setLastSavedAt(cfg.updated_at);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [user, getFreshToken, initialLevelKey, report.assets]);
 
   const targetLevel =
     report.levels.find((l) => l.key === targetLevelKey) ??
@@ -151,9 +184,12 @@ export function PeaUserPortfolioManager({
       normPctRecord[a.key] = Math.round((currentWeights[a.key] ?? 0) * 10000) / 10000;
     }
     try {
+      const token = await getFreshToken();
+      const headers: Record<string, string> = { "Content-Type": "application/json" };
+      if (token) headers.Authorization = `Bearer ${token}`;
       const res = await fetch("/api/pea/portfolio", {
         method: "PUT",
-        headers: { "Content-Type": "application/json" },
+        headers,
         body: JSON.stringify({
           input_mode: inputMode,
           target_level: targetLevel.key,
@@ -166,7 +202,7 @@ export function PeaUserPortfolioManager({
       if (res.ok) {
         const saved = (await res.json()) as PeaPortfolioConfig;
         setLastSavedAt(saved.updated_at);
-        setFeedback("Portefeuille enregistré en base de données.");
+        setFeedback("Portefeuille enregistré en base de données PostgreSQL.");
       } else {
         setFeedback("Erreur lors de la sauvegarde du portefeuille.");
       }
